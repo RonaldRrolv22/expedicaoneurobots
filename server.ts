@@ -22,17 +22,17 @@ app.use(express.json());
 // Funções de processamento de PDF nativas usando pdf-lib
 // processPdfNative substitui o antigo processador Python
 
-const OMIE_APP_KEY = process.env.OMIE_APP_KEY || "1511136822195";
-const OMIE_APP_SECRET = process.env.OMIE_APP_SECRET || "e1af2faaa330cc0f5024b9e3b87244f0";
+const OMIE_APP_KEY = process.env.OMIE_APP_KEY as string;
+const OMIE_APP_SECRET = process.env.OMIE_APP_SECRET as string;
 const BASE_URL = "https://app.omie.com.br/api/v1";
 
-const SHEET_ID = "1xpTC9L5fNmiqwXh3RjYPmMk-L6EP9exzIB1gg5p2-tc";
-const SHEET_SERIAL_ID = "14GL1MIuEY7o1nvnEtgC7-siurYSzcbFBwxC1yQ8J3fc";
+const SHEET_ID = process.env.SHEET_ID || "1xpTC9L5fNmiqwXh3RjYPmMk-L6EP9exzIB1gg5p2-tc";
+const SHEET_SERIAL_ID = process.env.SHEET_SERIAL_ID || "14GL1MIuEY7o1nvnEtgC7-siurYSzcbFBwxC1yQ8J3fc";
 
 // Correios Configuration
-const CORREIOS_TOKEN = process.env.CORREIOS_TOKEN || "cws-ch1_Xp19fAP2XFD6R2IUEo6bmV1cm9ib3RzOjk5MTI2OTgzMzI_MTpQbDA6MDA3OTIzMzQ4MQ3TG6B2z7pEjrorn";
-const CORREIOS_CONTRATO = process.env.CORREIOS_CONTRATO || "9912698332";
-const CORREIOS_CARTAO_POSTAGEM = process.env.CORREIOS_CARTAO_POSTAGEM || "0079233481";
+const CORREIOS_TOKEN = process.env.CORREIOS_TOKEN as string;
+const CORREIOS_CONTRATO = process.env.CORREIOS_CONTRATO as string;
+const CORREIOS_CARTAO_POSTAGEM = process.env.CORREIOS_CARTAO_POSTAGEM as string;
 const BASE_URL_CORREIOS = "https://api.correios.com.br";
 
 const REMETENTE = {
@@ -1945,7 +1945,11 @@ async function startServer() {
   });
 }
 
-startServer().catch((err) => {
-  console.error("Erro ao iniciar o servidor:", err);
-  process.exit(1);
-});
+if (!process.env.VERCEL) {
+  startServer().catch((err) => {
+    console.error("Erro ao iniciar o servidor:", err);
+    process.exit(1);
+  });
+}
+
+export default app;
