@@ -7,9 +7,6 @@ import { v4 as uuidv4 } from "uuid";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import dotenv from "dotenv";
 import sharp from "sharp";
-import * as canvas from "canvas";
-// @ts-ignore
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.js";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { JWT } from "google-auth-library";
 
