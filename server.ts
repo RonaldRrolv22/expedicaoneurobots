@@ -8,6 +8,7 @@ import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import dotenv from "dotenv";
 import sharp from "sharp";
 import * as canvas from "canvas";
+// @ts-ignore
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.js";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { JWT } from "google-auth-library";
@@ -327,7 +328,7 @@ app.get("/api/download-label/:idPre", async (req, res) => {
             responseType: "arraybuffer",
           });
           
-          const contentType = downloadResponse.headers["content-type"] || "";
+          const contentType = String(downloadResponse.headers["content-type"] || "");
           if (downloadResponse.status === 200) {
             if (contentType.includes("application/pdf")) {
               pdfBuffer = Buffer.from(downloadResponse.data);
@@ -1615,7 +1616,7 @@ app.get("/api/download-combined/:nIdNF/:idPre", async (req, res) => {
                 responseType: "arraybuffer",
               });
               if (downloadResponse.status === 200) {
-                const contentType = downloadResponse.headers["content-type"] || "";
+                const contentType = String(downloadResponse.headers["content-type"] || "");
                 if (contentType.includes("application/pdf")) {
                   labelBuffer = Buffer.from(downloadResponse.data);
                   break;
