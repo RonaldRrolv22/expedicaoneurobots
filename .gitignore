@@ -1,0 +1,13 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Credenciais / secrets locais (não versionar)
+client_secrets.json
+service-account.json
+token_google.json

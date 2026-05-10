@@ -1,0 +1,5 @@
+{
+  "name": "Expedição Neurobots",
+  "description": "Sistema automatizado de expedição com integração Omie, Google Sheets e Correios para gestão de pedidos e etiquetas.",
+  "requestFramePermissions": []
+}
