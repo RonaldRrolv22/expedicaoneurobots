@@ -6,7 +6,6 @@ import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import dotenv from "dotenv";
-import sharp from "sharp";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { JWT } from "google-auth-library";
 
@@ -365,7 +364,7 @@ app.get("/api/download-label/:idPre", async (req, res) => {
 });
 
 const GOOGLE_SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-const GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+const GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY?.replace(/["']/g, "").replace(/\\n/g, "\n");
 
 async function getGoogleAuth() {
   // Tentar ler do arquivo service-account.json se existir
@@ -1234,6 +1233,7 @@ async function imageToZplGfa(imagePath: string, width: number, height: number): 
   }
 
   try {
+    const sharp = (await import("sharp")).default;
     const monochrome = await sharp(imagePath)
       .resize(width, height, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
       .toColorspace('b-w')
