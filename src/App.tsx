@@ -380,9 +380,6 @@ export default function App() {
       if (data.error) throw new Error(data.error);
       
       const spreadsheetOrders: NFe[] = data.orders || [];
-      // #region agent log
-      fetch('http://127.0.0.1:7807/ingest/26f97663-f309-47ed-9a50-7e7af4969a0f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cfb5c4'},body:JSON.stringify({sessionId:'cfb5c4',location:'App.tsx:383',message:'fetchPedidosExpedir orders received',data:{total:spreadsheetOrders.length,comNF:spreadsheetOrders.filter(o=>o.status==='NF Emitida').map(o=>({ped:o.pedido?.cNumPedido,nNF:o.ide?.nNF,permiteSerial:o.permiteSerial,serialSaved:o.serialSaved,rastreio:o.rastreio,status:o.status})),semNF:spreadsheetOrders.filter(o=>o.status!=='NF Emitida').map(o=>({ped:o.pedido?.cNumPedido,status:o.status}))},timestamp:Date.now(),runId:'post-fix',hypothesisId:'verification'})}).catch(()=>{});
-      // #endregion
       setNfes(prev => {
         // Remover pedidos anteriores da planilha para não duplicar na atualização
         const currentOmie = prev.filter(n => !n.isSpreadsheet);

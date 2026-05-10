@@ -32,6 +32,13 @@ const CORREIOS_CONTRATO = process.env.CORREIOS_CONTRATO as string;
 const CORREIOS_CARTAO_POSTAGEM = process.env.CORREIOS_CARTAO_POSTAGEM as string;
 const BASE_URL_CORREIOS = "https://api.correios.com.br";
 
+console.log("ENV CHECK", {
+  temGoogleCredentials: Boolean(process.env.GOOGLE_CREDENTIALS_JSON),
+  temGoogleToken: Boolean(process.env.GOOGLE_TOKEN_JSON),
+  temOmieAppKey: Boolean(process.env.OMIE_APP_KEY),
+  temOmieAppSecret: Boolean(process.env.OMIE_APP_SECRET)
+});
+
 const REMETENTE = {
   nome: "Neurobots",
   cpfCnpj: "24052658000105",
@@ -367,7 +374,21 @@ const GOOGLE_SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
 const GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY?.replace(/["']/g, "").replace(/\\n/g, "\n");
 
 async function getGoogleAuth() {
-  // Tentar ler do arquivo service-account.json se existir
+  // 1. Tentar ler do process.env.GOOGLE_CREDENTIALS_JSON
+  if (process.env.GOOGLE_CREDENTIALS_JSON) {
+    try {
+      const saData = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
+      return new JWT({
+        email: saData.client_email,
+        key: saData.private_key,
+        scopes: ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.readonly"],
+      });
+    } catch (e: any) {
+      console.error("Erro ao fazer parse de GOOGLE_CREDENTIALS_JSON:", e.message || e);
+    }
+  }
+
+  // 2. Tentar ler do arquivo service-account.json se existir
   const saPath = path.join(process.cwd(), "service-account.json");
   if (fs.existsSync(saPath)) {
     try {
@@ -965,7 +986,10 @@ app.get("/api/pedidos-expedir", async (req, res) => {
     res.json({ orders: allOrders });
   } catch (error: any) {
     console.error("Erro ao buscar pedidos em separação:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      error: "Erro interno em /api/pedidos-expedir",
+      message: error instanceof Error ? error.message : String(error)
+    });
   }
 });
 
@@ -1187,7 +1211,10 @@ app.post("/api/nfes", async (req, res) => {
 
     res.json({ nfes: todas });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      error: "Erro interno em /api/nfes",
+      message: error instanceof Error ? error.message : String(error)
+    });
   }
 });
 
