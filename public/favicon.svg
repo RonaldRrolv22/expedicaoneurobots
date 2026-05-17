@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Fundo arredondado -->
+  <rect width="32" height="32" rx="7" fill="#1a9da5"/>
+
+  <!-- Caixa - corpo -->
+  <rect x="6" y="14" width="20" height="13" rx="1.5" fill="white" opacity="0.95"/>
+
+  <!-- Caixa - tampa -->
+  <path d="M5 13.5 L16 10 L27 13.5 L27 15 L5 15 Z" fill="white"/>
+
+  <!-- Linha central da tampa -->
+  <line x1="16" y1="10" x2="16" y2="15" stroke="#1a9da5" stroke-width="1.2"/>
+
+  <!-- Fita horizontal da caixa -->
+  <rect x="13" y="15" width="6" height="12" rx="0" fill="#1a9da5" opacity="0.25"/>
+
+  <!-- Seta de envio (para cima) -->
+  <path d="M13 8 L16 5 L19 8" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <line x1="16" y1="5" x2="16" y2="10" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+</svg>
