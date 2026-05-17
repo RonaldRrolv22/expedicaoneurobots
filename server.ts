@@ -792,15 +792,31 @@ app.get("/api/pedidos-expedir", async (req, res) => {
     const serialDoc = new GoogleSpreadsheet(SHEET_SERIAL_ID, auth);
     await serialDoc.loadInfo();
     const enviosSheet = serialDoc.sheetsByTitle["DADOS_DE_ENVIO"];
-    const enviosMap: Record<string, { serial: string; rastreio: string }> = {};
+    const enviosMap: Record<string, { serial: string; rastreio: string; separado: boolean; marcadoSeparado: boolean; statusSeparacao: string }> = {};
     if (enviosSheet) {
       const enviosRows = await enviosSheet.getRows();
+      const separadoHeaderName = enviosSheet.headerValues.find((h: string) =>
+        h && h.toLowerCase().replace(/[\s]/g, '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes('separ')
+      ) || enviosSheet.headerValues[12] || null;
+      console.log(`[SEPARADO] Header detectado: "${separadoHeaderName}"`);
       enviosRows.forEach(row => {
         const pedido = String(row.get("Pedido") || row.get(enviosSheet.headerValues[0]) || "").trim().toUpperCase();
         const serial = String(row.get("Serial") || row.get(enviosSheet.headerValues[1]) || "").trim();
         const rastreio = String(row.get("Rastreio") || row.get(enviosSheet.headerValues[2]) || "").trim();
+        const separadoRaw = separadoHeaderName ? String(row.get(separadoHeaderName) || "").trim() : "";
+        const [statusPart = "", timestampPart = ""] = separadoRaw.split('|');
+        const statusNorm = statusPart.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s/g, '');
+        // isMarcado = qualquer status definido e diferente de "Em separação"
+        const isMarcado = statusPart.trim().length > 0 && !statusNorm.startsWith('emsepara');
+        let separado = false;
+        if (isMarcado && timestampPart) {
+          const ts = new Date(timestampPart);
+          if (!isNaN(ts.getTime())) separado = (Date.now() - ts.getTime()) > 24 * 60 * 60 * 1000;
+        } else if (isMarcado && !timestampPart) {
+          separado = true; // valor antigo sem timestamp: tratar como > 24h
+        }
         if (pedido && !enviosMap[pedido]) {
-          enviosMap[pedido] = { serial, rastreio };
+          enviosMap[pedido] = { serial, rastreio, separado, marcadoSeparado: isMarcado, statusSeparacao: statusPart.trim() };
         }
       });
     }
@@ -895,6 +911,9 @@ app.get("/api/pedidos-expedir", async (req, res) => {
       if (envioInfo) {
         finalOrder.serial = envioInfo.serial !== "nenhum informação" ? envioInfo.serial : "";
         finalOrder.rastreio = envioInfo.rastreio;
+        finalOrder.separado = envioInfo.separado || false;
+        finalOrder.marcadoSeparado = envioInfo.marcadoSeparado || false;
+        finalOrder.statusSeparacao = envioInfo.statusSeparacao || "";
         if (finalOrder.serial) finalOrder.serialSaved = true;
         if (finalOrder.rastreio) {
           finalOrder.labelStatus = 'success';
@@ -905,6 +924,12 @@ app.get("/api/pedidos-expedir", async (req, res) => {
       // Validação de Serial para etiquetas
       if (finalOrder.permiteSerial && !finalOrder.serial && finalOrder.status === "NF Emitida") {
         finalOrder.status = "Aguardando número de série";
+      }
+
+      // Todos os pedidos da planilha: some após 24h com status "Enviado" (ou qualquer status marcado)
+      if (finalOrder.separado === true) {
+        console.log(`[SEPARADO] Pedido ${raw.numPedido} filtrado (marcado há mais de 24h: ${finalOrder.statusSeparacao}).`);
+        continue;
       }
 
       allOrders.push(finalOrder);
@@ -1066,6 +1091,62 @@ app.post("/api/save-serials", async (req, res) => {
     res.json({ success: true });
   } catch (error: any) {
     console.error("Erro ao salvar na planilha:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint para registrar/alterar status de envio (todos os pedidos da planilha)
+app.post("/api/marcar-separado", async (req, res) => {
+  const { pedido, operatorName, status } = req.body;
+  const novoStatus = status || 'Separado'; // default para retrocompatibilidade
+
+  if (!pedido) {
+    return res.status(400).json({ error: "Número de pedido obrigatório." });
+  }
+
+  try {
+    const auth = await getGoogleAuth();
+    if (!auth) throw new Error("Google Auth não configurado.");
+
+    const doc = new GoogleSpreadsheet(SHEET_SERIAL_ID, auth);
+    await doc.loadInfo();
+
+    const sheet = doc.sheetsByTitle["DADOS_DE_ENVIO"] || doc.sheetsByIndex[0];
+    const rows = await sheet.getRows();
+    const headers = sheet.headerValues;
+
+    const pedidoNorm = String(pedido).trim().toUpperCase();
+    const dataAtual = new Date();
+    const formattedDate = `${String(dataAtual.getDate()).padStart(2, '0')}/${String(dataAtual.getMonth() + 1).padStart(2, '0')}/${dataAtual.getFullYear()}`;
+
+    // Detectar coluna de status de separação pelo cabeçalho (normaliza acentos/espaços, busca "separ")
+    const separadoHeaderName = headers.find((h: string) =>
+      h && h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s/g, '').includes('separ')
+    ) || headers[12] || "Status de separação";
+    console.log(`[SEPARADO] Escrevendo em coluna: "${separadoHeaderName}" para pedido ${pedidoNorm}`);
+
+    const existingRow = rows.find(r => {
+      const rowPedido = String(r.get("Pedido") || r.get(headers[0]) || "").trim().toUpperCase();
+      return rowPedido === pedidoNorm;
+    });
+
+    if (existingRow) {
+      existingRow.set(separadoHeaderName, `${novoStatus}|${new Date().toISOString()}`);
+      await existingRow.save();
+      console.log(`[SEPARADO] Pedido ${pedidoNorm} → status "${novoStatus}"`);
+    } else {
+      const newRowObj: Record<string, string> = {
+        [headers[0] || "Pedido"]: pedidoNorm,
+        [headers[3] || "Operador"]: operatorName || "",
+        [separadoHeaderName]: `${novoStatus}|${new Date().toISOString()}`,
+      };
+      await sheet.addRow(newRowObj);
+      console.log(`[SEPARADO] Pedido ${pedidoNorm} inserido com status "${novoStatus}"`);
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("Erro ao marcar pedido como separado:", error);
     res.status(500).json({ error: error.message });
   }
 });

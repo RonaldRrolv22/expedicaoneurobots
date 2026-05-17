@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useState, useEffect } from "react";
-import { Search, Download, FileText, FileCode, Calendar, Loader2, AlertCircle, CheckCircle2, Printer, Package, LogOut, User, Settings, Activity, ArrowRight, Pencil, Lock, RotateCw, Truck, Boxes, MapPin } from "lucide-react";
+import { Search, Download, FileText, FileCode, Calendar, Loader2, AlertCircle, CheckCircle2, Printer, Package, LogOut, User, Settings, Activity, ArrowRight, Pencil, Lock, RotateCw, Truck, Boxes, MapPin, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { onAuthStateChanged, signOut, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
 import { auth } from "./firebase";
@@ -50,6 +50,11 @@ interface NFe {
   labelError?: string;
   printed?: boolean;
   modulo?: 'vendas' | 'servicos';
+  separado?: boolean;
+  marcadoSeparado?: boolean;
+  statusSeparacao?: string;
+  separandoLoading?: boolean;
+  statusDropdownOpen?: boolean;
   // Campos da Planilha (Pedidos em Separação)
   origem?: string;
   priority?: "Atrasado" | "Alta prioridade" | "Média prioridade" | "Baixa prioridade";
@@ -673,6 +678,38 @@ export default function App() {
     handleGenerateLabel(nfe, true);
   };
 
+  const handleMarcarSeparado = async (nfe: NFe, novoStatus: string = 'Enviado') => {
+    if (!nfe.isSpreadsheet) return; // apenas pedidos da planilha
+    const pedido = nfe.pedido?.cNumPedido;
+    if (!pedido) return;
+
+    // Fechar dropdown e mostrar loading
+    setNfes(prev => prev.map(n => n.compl.nIdNF === nfe.compl.nIdNF
+      ? { ...n, separandoLoading: true, statusDropdownOpen: false }
+      : n
+    ));
+    try {
+      const response = await fetch("/api/marcar-separado", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pedido, operatorName, status: novoStatus }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Erro ao salvar status.");
+
+      const isMarcado = novoStatus !== 'Em separação';
+      setNfes(prev => prev.map(n => n.compl.nIdNF === nfe.compl.nIdNF
+        ? { ...n, marcadoSeparado: isMarcado, statusSeparacao: novoStatus, separandoLoading: false }
+        : n
+      ));
+      setSuccess(`Status do pedido ${pedido} atualizado: ${novoStatus}`);
+    } catch (err: any) {
+      console.error("Erro ao salvar status:", err);
+      setNfes(prev => prev.map(n => n.compl.nIdNF === nfe.compl.nIdNF ? { ...n, separandoLoading: false } : n));
+      setError(err.message || "Erro ao salvar status.");
+    }
+  };
+
   const handlePrintCombined = async (nIdNF: number, idPre: string, serial?: string) => {
     try {
       const nfe = nfes.find(n => n.compl.nIdNF === nIdNF);
@@ -695,6 +732,11 @@ export default function App() {
             }] 
           }),
         });
+
+        // Auto-marcar como Enviado para todos os pedidos da planilha
+        if (nfe.isSpreadsheet && !nfe.marcadoSeparado) {
+          handleMarcarSeparado(nfe, 'Enviado');
+        }
       }
 
       let url_combined = `/api/download-combined/${nIdNF}/${idPre}`;
@@ -775,6 +817,11 @@ export default function App() {
       
       // Marcar como impresso localmente
       setNfes(prev => prev.map(n => n.compl.nIdNF === nfe.compl.nIdNF ? { ...n, printed: true } : n));
+
+      // Auto-marcar como Enviado para todos os pedidos da planilha
+      if (nfe.isSpreadsheet && !nfe.marcadoSeparado) {
+        handleMarcarSeparado(nfe, 'Enviado');
+      }
     } catch (err: any) {
       console.error("Erro ao imprimir:", err);
       setError("Erro ao imprimir: " + (err?.message || err));
@@ -812,6 +859,11 @@ export default function App() {
       
       // Marcar como impresso localmente
       setNfes(prev => prev.map(n => n.compl.nIdNF === nfe.compl.nIdNF ? { ...n, printed: true } : n));
+
+      // Auto-marcar como Enviado para todos os pedidos da planilha ao baixar ZPL
+      if (nfe.isSpreadsheet && !nfe.marcadoSeparado) {
+        handleMarcarSeparado(nfe, 'Enviado');
+      }
     } catch (err: any) {
       console.error("Erro ao gerar ZPL:", err);
       setError(err.message || "Erro ao gerar ZPL.");
@@ -1314,7 +1366,7 @@ export default function App() {
                 <div 
                   key={nfe.compl.nIdNF} 
                   className={`rounded-xl p-5 border shadow-sm transition-all duration-300 flex flex-col lg:flex-row items-center gap-6 ${
-                    nfe.printed 
+                    (nfe.printed || nfe.marcadoSeparado)
                       ? 'bg-blue-50 border-blue-200' 
                       : 'bg-white border-slate-200 hover:shadow-md hover:border-brand-teal'
                   }`}
@@ -1437,6 +1489,62 @@ export default function App() {
                             <span className="italic text-slate-400 min-h-[36px] flex items-center"><Truck size={14} className="text-slate-400 mr-2" /> rastreio pendente</span>
                           )}
                         </div>
+
+                        {/* Status de Envio com Dropdown - todos os pedidos da planilha */}
+                        {nfe.isSpreadsheet && (() => {
+                          const STATUS_OPTS = [
+                            { value: 'Em separação', color: 'text-slate-600 bg-slate-100 border-slate-300', dot: 'bg-slate-400' },
+                            { value: 'Enviado',       color: 'text-brand-teal bg-brand-teal/10 border-brand-teal/40', dot: 'bg-brand-teal' },
+                          ];
+                          const current = nfe.statusSeparacao || (nfe.marcadoSeparado ? 'Enviado' : null);
+                          const opt = STATUS_OPTS.find(o => o.value === current) || null;
+                          return (
+                            <div className="mt-2 relative">
+                              {nfe.separandoLoading ? (
+                                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-teal/10 border border-brand-teal/20 text-brand-teal text-[11px] font-bold">
+                                  <Loader2 size={11} className="animate-spin" />
+                                  Salvando...
+                                </div>
+                              ) : current && opt ? (
+                                <>
+                                  <button
+                                    onClick={() => setNfes(prev => prev.map(n => n.compl.nIdNF === nfe.compl.nIdNF ? { ...n, statusDropdownOpen: !n.statusDropdownOpen } : n))}
+                                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-bold transition-all hover:opacity-80 active:scale-95 ${opt.color}`}
+                                  >
+                                    <span className={`w-1.5 h-1.5 rounded-full ${opt.dot}`} />
+                                    {current}
+                                    <ChevronDown size={10} className={`transition-transform ${nfe.statusDropdownOpen ? 'rotate-180' : ''}`} />
+                                  </button>
+                                  {nfe.statusDropdownOpen && (
+                                    <div className="absolute left-0 top-full mt-1 z-50 bg-white rounded-xl shadow-xl border border-slate-100 py-1 min-w-[160px]">
+                                      {STATUS_OPTS.map(o => (
+                                        <button
+                                          key={o.value}
+                                          onClick={() => handleMarcarSeparado(nfe, o.value)}
+                                          className={`w-full flex items-center gap-2 px-3 py-2 text-[11px] font-bold hover:bg-slate-50 transition-colors text-left ${
+                                            o.value === current ? 'opacity-50 cursor-default' : ''
+                                          }`}
+                                        >
+                                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${o.dot}`} />
+                                          {o.value}
+                                          {o.value === current && <CheckCircle2 size={10} className="ml-auto text-brand-teal" />}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() => handleMarcarSeparado(nfe, 'Enviado')}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-teal/10 border border-brand-teal/30 text-brand-teal hover:bg-brand-teal hover:text-white text-[11px] font-bold transition-all duration-200 active:scale-95"
+                                >
+                                  <CheckCircle2 size={11} />
+                                  Marcar como enviado
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 
